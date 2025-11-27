@@ -1,0 +1,8 @@
+[theme]
+# Default theme; users can switch to Dark from the app menu
+base = "light"
+primaryColor = "#FF4B4B"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F5F5"
+textColor = "#262730"
+font = "sans serif"
