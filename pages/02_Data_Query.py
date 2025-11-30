@@ -48,31 +48,6 @@ def _normalize_lists(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def show_media_modal(row: pd.Series):
-    """Open a modal with high‑resolution media and metadata for a selected observation."""
-    @st.dialog("Detalle de Observación", width="large")
-    def _modal():
-        col1, col2 = st.columns(2)
-        with col1:
-            if row.get("primary_image"):
-                # use_column_width deprecated; replaced with use_container_width for future compatibility
-                st.image(row["primary_image"], use_container_width=True, caption="Imagen Principal")
-            add_imgs = row.get("additional_images") or []
-            if add_imgs:
-                st.subheader("Imágenes Adicionales")
-                for img_url in add_imgs[:5]:
-                    st.image(img_url, use_container_width=True)
-        with col2:
-            if row.get("primary_video"):
-                st.video(row["primary_video"])
-            add_vids = row.get("additional_movies") or []
-            if add_vids:
-                st.subheader("Videos Adicionales")
-                for vid_url in add_vids[:3]:
-                    st.video(vid_url)
-        with st.expander("Metadatos"):
-            st.json({k: (v if not isinstance(v, list) else v[:50]) for k, v in row.to_dict().items()})
-    _modal()
 
 
 def main():
@@ -202,7 +177,7 @@ def main():
 
     st.subheader("Query Results")
     # view_mode = st.radio("Table display", ["Interactive", "Styled"], index=0, horizontal=True)
-    # st.caption("Interactive: selección + modal | Styled: tabla compacta con enlaces.")
+    # st.caption("Interactive: selection + modal | Styled: compact table with links.")
 
     # Build media columns (shared by both modes)
     base_df = result_df.copy()
@@ -262,58 +237,7 @@ def main():
     styled_cols = [c for c in ["date_time", "instruments", "target", "comments", "polarimetry", "primary_image", "primary_video", "additional_images", "additional_movies"] if c in base_df.columns]
 
     view_mode = "Styled"  # Force styled mode for testing
-    if view_mode == "Interactive":
-        display_columns = [c for c in ["date_time", "instruments", "target", "comments", "polarimetry", "primary_image", "primary_video"] if c in base_df.columns]
-        display_df = base_df[display_columns].copy()
-        # Format columns
-        if "date_time" in display_df.columns:
-            display_df["date_time"] = pd.to_datetime(display_df["date_time"], errors="coerce")
-        if "instruments" in display_df.columns:
-            display_df["instruments"] = display_df["instruments"].apply(lambda x: ", ".join(x) if isinstance(x, list) else ("" if pd.isna(x) else str(x)))
-        if "polarimetry" in display_df.columns:
-            display_df["polarimetry"] = display_df["polarimetry"].astype(str) == "True"
-        if "primary_video" in display_df.columns:
-            display_df["primary_video"] = display_df["primary_video"].fillna("")
-        if "primary_image" in display_df.columns:
-            display_df["primary_image"] = display_df["primary_image"].fillna("")
-            # Build safe thumbnail column from primary_image
-            display_df["thumb"] = display_df["primary_image"].apply(lambda u: safe_thumbnail(u, w=120))
-        display_df["ver_detalle"] = "🔍 Ver"
-
-        column_config = {}
-        if "date_time" in display_df.columns:
-            column_config["date_time"] = st.column_config.DatetimeColumn("Date & Time", format="YYYY-MM-DD HH:mm:ss")
-        # Use thumbnail column for image preview if available
-        if "thumb" in display_df.columns:
-            column_config["thumb"] = st.column_config.ImageColumn("Preview", width="small")
-        if "instruments" in display_df.columns:
-            column_config["instruments"] = st.column_config.TextColumn("Instruments", width="medium")
-        if "target" in display_df.columns:
-            column_config["target"] = st.column_config.TextColumn("Target", width="medium")
-        if "comments" in display_df.columns:
-            column_config["comments"] = st.column_config.TextColumn("Comments", width="large")
-        if "polarimetry" in display_df.columns:
-            column_config["polarimetry"] = st.column_config.CheckboxColumn("Polarimetry", width="small")
-        if "primary_video" in display_df.columns:
-            column_config["primary_video"] = st.column_config.LinkColumn("Video", display_text="🎬 Play")
-        column_config["ver_detalle"] = st.column_config.TextColumn("Acción", width="small")
-
-        event = st.dataframe(
-            display_df,
-            column_config=column_config,
-            hide_index=True,
-            use_container_width=True,
-            on_select="rerun",
-            selection_mode="single-row",
-        )
-        try:
-            if event.selection.rows:
-                selected_idx = event.selection.rows[0]
-                selected_row = base_df.iloc[selected_idx]
-                show_media_modal(selected_row)
-        except Exception:
-            pass
-    else:
+    if view_mode == "Styled":
         # Styled (legacy HTML) – may be sanitized on Streamlit Cloud.
         display_df = base_df[styled_cols].copy()
         label_map = {
@@ -424,7 +348,7 @@ def main():
             data=csv_bytes,
             file_name="la_palma_query.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
         )
     except Exception as e:
         st.error(f"❌ Error preparing download: {e}")

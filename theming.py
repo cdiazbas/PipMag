@@ -40,7 +40,7 @@ def init_theme(default: str | None = None) -> None:
     """
     if THEME_STATE_KEY not in st.session_state:
         # Prefer explicit default, else Streamlit config, else dark as global default
-        base = "dark"
+        base = "light"
         st.session_state[THEME_STATE_KEY] = base.lower()
 
 
@@ -69,7 +69,7 @@ def render_theme_toggle(position: str = "header") -> None:
         # Reduced spacer to bring content closer to top while keeping toggle clickable.
         cols = st.columns([1, 1, 1, 1, 1])
         with cols[-1]:
-            st.markdown("<div style='height:0.0rem'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:0rem'></div>", unsafe_allow_html=True)
             st.toggle(
                 "Dark mode",
                 value=is_dark(),
@@ -78,7 +78,7 @@ def render_theme_toggle(position: str = "header") -> None:
             )
     else:
         # Add a small spacer to move the inline toggle down
-        st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
         st.toggle(
             "Dark mode",
             value=is_dark(),
@@ -99,7 +99,6 @@ def render_theme_toggle_sidebar() -> None:
             "Dark mode",
             value=is_dark(),
             on_change=lambda: set_theme(not is_dark()),
-            help="Toggle between light and dark mode",
         )
 
 def render_theme_toggle_floating(top: str = "2rem", right: str = "2rem") -> None:
@@ -150,10 +149,14 @@ def apply_theme_css() -> None:
         <style>
         /* Ultra-tight top spacing */
         [data-testid="stAppViewContainer"] > .main, .block-container {
-            padding-top: 0.0rem !important;
+            padding-top: 0rem !important;
+            padding-bottom: 0.5rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
         }
-        h1 { margin-top: 0.05rem !important; margin-bottom: 0.25rem !important; }
-        h2 { margin-top: 0.05rem !important; margin-bottom: 0.25rem !important; }
+        h1 { margin-top: 0rem !important; margin-bottom: 0.1rem !important; }
+        h2 { margin-top: 0rem !important; margin-bottom: 0.1rem !important; }
+        h3, h4, h5, h6 { margin-top: 0rem !important; margin-bottom: 0.1rem !important; }
         /* Remove default top gap occasionally injected */
         div[data-testid="stToolbar"] + div:empty { display: none !important; }
         /* Base backgrounds and text */
@@ -170,12 +173,16 @@ def apply_theme_css() -> None:
         section[data-testid="stSidebar"] > div,
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
         [data-testid="stSidebar"] .element-container {
-            background-color: #262730 !important;
-            color: #fafafa !important;
+            background-color: #23242b !important;
+            color: #f3f3f3 !important;
+            font-weight: 500 !important;
+            transition: background 0.2s, color 0.2s;
         }
+        
         /* Reduce sidebar top padding to bring content closer to top */
         section[data-testid="stSidebar"] > div {
-            padding-top: 0.5rem !important;
+            padding-top: 0.25rem !important;
+            padding-bottom: 0.25rem !important;
         }
         
         /* Text elements - comprehensive */
@@ -407,10 +414,14 @@ def apply_theme_css() -> None:
         <style>
         /* Ultra-tight top spacing */
         [data-testid="stAppViewContainer"] > .main, .block-container {
-            padding-top: 0.25rem !important;
+            padding-top: 0rem !important;
+            padding-bottom: 0.5rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
         }
-        h1 { margin-top: 0.05rem !important; margin-bottom: 0.25rem !important; }
-        h2 { margin-top: 0.40rem !important; margin-bottom: 0.25rem !important; }
+        h1 { margin-top: 0rem !important; margin-bottom: 0.1rem !important; }
+        h2 { margin-top: 0rem !important; margin-bottom: 0.1rem !important; }
+        h3, h4, h5, h6 { margin-top: 0rem !important; margin-bottom: 0.1rem !important; }
         div[data-testid="stToolbar"] + div:empty { display: none !important; }
         /* Base backgrounds and text */
         html, body, [data-testid="stAppViewContainer"], .main {
@@ -426,7 +437,8 @@ def apply_theme_css() -> None:
         }
         /* Reduce sidebar top padding to bring content closer to top */
         section[data-testid="stSidebar"] > div {
-            padding-top: 0.5rem !important;
+            padding-top: 0.25rem !important;
+            padding-bottom: 0.25rem !important;
         }
         
         /* Links */
