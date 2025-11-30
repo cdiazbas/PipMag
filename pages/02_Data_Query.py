@@ -1,6 +1,12 @@
-import html as htmlesc
+"""Data Query page (Cloud-safe) with native media previews and modal detail view.
+
+Removes all custom HTML tables. Uses Streamlit native columns, row selection,
+and a modal (st.dialog) to show full-resolution images/videos and metadata.
+"""
+
 from datetime import time
 from typing import Any, List
+import html as htmlesc
 import importlib.util
 import sys
 
@@ -28,6 +34,33 @@ def _normalize_lists(df: pd.DataFrame) -> pd.DataFrame:
     if "polarimetry" in out.columns:
         out["polarimetry"] = out["polarimetry"].astype(str).str.strip().str.capitalize()
     return out
+
+
+def show_media_modal(row: pd.Series):
+    """Open a modal with high‑resolution media and metadata for a selected observation."""
+    @st.dialog("Detalle de Observación", width="large")
+    def _modal():
+        col1, col2 = st.columns(2)
+        with col1:
+            if row.get("primary_image"):
+                # use_column_width deprecated; replaced with use_container_width for future compatibility
+                st.image(row["primary_image"], use_container_width=True, caption="Imagen Principal")
+            add_imgs = row.get("additional_images") or []
+            if add_imgs:
+                st.subheader("Imágenes Adicionales")
+                for img_url in add_imgs[:5]:
+                    st.image(img_url, use_container_width=True)
+        with col2:
+            if row.get("primary_video"):
+                st.video(row["primary_video"])
+            add_vids = row.get("additional_movies") or []
+            if add_vids:
+                st.subheader("Videos Adicionales")
+                for vid_url in add_vids[:3]:
+                    st.video(vid_url)
+        with st.expander("Metadatos"):
+            st.json({k: (v if not isinstance(v, list) else v[:50]) for k, v in row.to_dict().items()})
+    _modal()
 
 
 def main():
@@ -155,12 +188,11 @@ def main():
 
     # (Summary metrics removed per request)
 
-    # Table display toggle
     st.subheader("Query Results")
-    view_mode = st.radio("Table display", ["Interactive", "Styled"], index=1, horizontal=True)
+    view_mode = st.radio("Table display", ["Interactive", "Styled"], index=0, horizontal=True)
+    st.caption("Interactive: selección + modal | Styled: tabla compacta con enlaces.")
 
-    # Styled HTML table (exactly like Home, plus media) or Interactive DataFrame
-    base_cols = [c for c in ["date_time", "instruments", "target", "comments", "polarimetry"] if c in result_df.columns]
+    # Build media columns (shared by both modes)
     base_df = result_df.copy()
 
     # Helpers to select primary media and collect additional links
@@ -210,125 +242,87 @@ def main():
 
     # Derive additional images/movies per row
     base_df[["additional_images", "additional_movies"]] = base_df.apply(collect_additional_media, axis=1)
-    # Extend displayed columns (will reorder for display)
-    base_cols.extend(["primary_image", "primary_video", "additional_images", "additional_movies"])
-
     # Sort by date_time desc when available
     if "date_time" in base_df.columns:
         base_df = base_df.sort_values("date_time", ascending=False)
 
-    display_df = base_df[base_cols].copy()
+    # Columns for styled mode (include additional media)
+    styled_cols = [c for c in ["date_time", "instruments", "target", "comments", "polarimetry", "primary_image", "primary_video", "additional_images", "additional_movies"] if c in base_df.columns]
+
     if view_mode == "Interactive":
-        interactive_df = display_df.copy()
-        # Convert datetime to actual datetime dtype
-        if "date_time" in interactive_df.columns:
-            interactive_df["date_time"] = pd.to_datetime(interactive_df["date_time"], errors="coerce")
-        # Instruments as comma string
-        if "instruments" in interactive_df.columns:
-            interactive_df["instruments"] = interactive_df["instruments"].apply(lambda x: ", ".join(x) if isinstance(x, list) else ("" if pd.isna(x) else str(x)))
-        # Polarimetry to bool for CheckboxColumn
-        if "polarimetry" in interactive_df.columns:
-            interactive_df["polarimetry"] = interactive_df["polarimetry"].astype(str) == "True"
-        # Additional images/movies condensed (limit by max_additional_sources)
-        if "additional_images" in interactive_df.columns:
-            interactive_df["additional_images"] = interactive_df["additional_images"].apply(
-                lambda lst: ", ".join(lst[:max_additional_sources]) + (f" (+{len(lst)-max_additional_sources})" if len(lst) > max_additional_sources else "") if isinstance(lst, list) and lst else ""
-            )
-        if "additional_movies" in interactive_df.columns:
-            interactive_df["additional_movies"] = interactive_df["additional_movies"].apply(
-                lambda lst: ", ".join(lst[:max_additional_sources]) + (f" (+{len(lst)-max_additional_sources})" if len(lst) > max_additional_sources else "") if isinstance(lst, list) and lst else ""
-            )
-        # Primary video as link text
-        if "primary_video" in interactive_df.columns:
-            interactive_df["primary_video"] = interactive_df["primary_video"].fillna("")
-        # Image column: keep raw URL string (Streamlit handles rendering)
-        if "primary_image" in interactive_df.columns:
-            interactive_df["primary_image"] = interactive_df["primary_image"].fillna("")
+        display_columns = [c for c in ["date_time", "instruments", "target", "comments", "polarimetry", "primary_image", "primary_video"] if c in base_df.columns]
+        display_df = base_df[display_columns].copy()
+        # Format columns
+        if "date_time" in display_df.columns:
+            display_df["date_time"] = pd.to_datetime(display_df["date_time"], errors="coerce")
+        if "instruments" in display_df.columns:
+            display_df["instruments"] = display_df["instruments"].apply(lambda x: ", ".join(x) if isinstance(x, list) else ("" if pd.isna(x) else str(x)))
+        if "polarimetry" in display_df.columns:
+            display_df["polarimetry"] = display_df["polarimetry"].astype(str) == "True"
+        if "primary_video" in display_df.columns:
+            display_df["primary_video"] = display_df["primary_video"].fillna("")
+        if "primary_image" in display_df.columns:
+            display_df["primary_image"] = display_df["primary_image"].fillna("")
+        display_df["ver_detalle"] = "🔍 Ver"
 
-        # Column configuration
         column_config = {}
-        if "date_time" in interactive_df.columns:
+        if "date_time" in display_df.columns:
             column_config["date_time"] = st.column_config.DatetimeColumn("Date & Time", format="YYYY-MM-DD HH:mm:ss")
-        if "primary_image" in interactive_df.columns:
+        if "primary_image" in display_df.columns:
             column_config["primary_image"] = st.column_config.ImageColumn("Preview", width="small")
-        if "instruments" in interactive_df.columns:
+        if "instruments" in display_df.columns:
             column_config["instruments"] = st.column_config.TextColumn("Instruments", width="medium")
-        if "target" in interactive_df.columns:
+        if "target" in display_df.columns:
             column_config["target"] = st.column_config.TextColumn("Target", width="medium")
-        if "comments" in interactive_df.columns:
+        if "comments" in display_df.columns:
             column_config["comments"] = st.column_config.TextColumn("Comments", width="large")
-        if "polarimetry" in interactive_df.columns:
+        if "polarimetry" in display_df.columns:
             column_config["polarimetry"] = st.column_config.CheckboxColumn("Polarimetry", width="small")
-        if "primary_video" in interactive_df.columns:
+        if "primary_video" in display_df.columns:
             column_config["primary_video"] = st.column_config.LinkColumn("Video", display_text="🎬 Play")
-        if "additional_images" in interactive_df.columns:
-            column_config["additional_images"] = st.column_config.TextColumn("Additional images", width="large")
-        if "additional_movies" in interactive_df.columns:
-            column_config["additional_movies"] = st.column_config.TextColumn("Additional movies", width="large")
+        column_config["ver_detalle"] = st.column_config.TextColumn("Acción", width="small")
 
-        # Compact styling (reuse dark/light CSS concept without HTML overrides)
-        if is_dark():
-            grid_css = """
-            <style>
-            [data-testid="stDataFrame"] td,[data-testid="stDataFrame"] th,[data-testid="stDataFrame"] [role="gridcell"],[data-testid="stDataFrame"] [role="columnheader"] {padding:6px 8px !important;font-size:13px !important;line-height:1.2 !important;}
-            [data-testid="stDataFrame"] tbody tr:first-child td {background-color: rgba(255,75,75,0.18) !important;}
-            </style>
-            """
-        else:
-            grid_css = """
-            <style>
-            [data-testid="stDataFrame"] td,[data-testid="stDataFrame"] th,[data-testid="stDataFrame"] [role="gridcell"],[data-testid="stDataFrame"] [role="columnheader"] {padding:6px 8px !important;font-size:13px !important;line-height:1.2 !important;}
-            [data-testid="stDataFrame"] tbody tr:first-child td {background-color: rgba(255,75,75,0.08) !important;}
-            </style>
-            """
-        st.markdown(grid_css, unsafe_allow_html=True)
-
-        # Dynamic height
-        rows = len(interactive_df)
-        height = min(720, 44 + rows * 28)
-        st.data_editor(
-            interactive_df,
+        event = st.dataframe(
+            display_df,
             column_config=column_config,
             hide_index=True,
-            disabled=True,
-            width='stretch',
-            height=height,
+            use_container_width=True,
+            on_select="rerun",
+            selection_mode="single-row",
         )
-        # Skip styled HTML rendering
-        styled_html_needed = False
+        try:
+            if event.selection.rows:
+                selected_idx = event.selection.rows[0]
+                selected_row = base_df.iloc[selected_idx]
+                show_media_modal(selected_row)
+        except Exception:
+            pass
     else:
-        styled_html_needed = True
-
-    if not styled_html_needed:
-        # HTML table skipped for Interactive mode
-        pass
-    else:
+        # Styled (legacy HTML) – may be sanitized on Streamlit Cloud.
+        display_df = base_df[styled_cols].copy()
         label_map = {
-        "date_time": "Date & Time",
-        "instruments": "Instruments",
-        "target": "Target",
-        "comments": "Comments",
-        "polarimetry": "Polarimetry",
-        "primary_image": "Preview image",
-        "primary_video": "Preview movie",
-        "additional_images": "Additional images",
-        "additional_movies": "Additional movies",
+            "date_time": "Date & Time",
+            "instruments": "Instruments",
+            "target": "Target",
+            "comments": "Comments",
+            "polarimetry": "Polarimetry",
+            "primary_image": "Preview image",
+            "primary_video": "Preview movie",
+            "additional_images": "Additional images",
+            "additional_movies": "Additional movies",
         }
-    # Ensure preview image/movie first, additional images/movies last
-    preview_first = ["primary_image", "primary_video"]
-    other_cols = [c for c in base_cols if c in display_df.columns and c not in preview_first and c not in ["additional_images", "additional_movies"]]
-    ordered_cols = preview_first + other_cols + [c for c in ["additional_images", "additional_movies"] if c in display_df.columns]
-    header_cells = ''.join(f"<th>{htmlesc.escape(label_map.get(col, col))}</th>" for col in ordered_cols)
-
-    if styled_html_needed:
-        rows_html_parts: List[str] = []
-        # Format display_df for styled mode
+        preview_first = ["primary_image", "primary_video"]
+        other_cols = [c for c in styled_cols if c not in preview_first and c not in ["additional_images", "additional_movies"]]
+        ordered_cols = preview_first + other_cols + [c for c in ["additional_images", "additional_movies"] if c in styled_cols]
+        header_cells = ''.join(f"<th>{htmlesc.escape(label_map.get(col, col))}</th>" for col in ordered_cols)
+        # Format basic columns
         if "date_time" in display_df.columns:
             display_df["date_time"] = pd.to_datetime(display_df["date_time"], errors="coerce").dt.strftime("%Y-%m-%d %H:%M:%S")
         if "instruments" in display_df.columns:
             display_df["instruments"] = display_df["instruments"].apply(lambda x: ", ".join(x) if isinstance(x, list) else ("" if pd.isna(x) else str(x)))
         if "polarimetry" in display_df.columns:
             display_df["polarimetry"] = display_df["polarimetry"].apply(lambda x: "✓" if str(x) == "True" else "✗")
+        rows_html_parts: List[str] = []
         for _, row in display_df.iterrows():
             tds = []
             for col in ordered_cols:
@@ -369,67 +363,34 @@ def main():
                 tds.append(f"<td>{cell}</td>")
             rows_html_parts.append(f"<tr>{''.join(tds)}</tr>")
         table_html = f"<table class='modern-table'><thead><tr>{header_cells}</tr></thead><tbody>{''.join(rows_html_parts)}</tbody></table>"
-
-    if is_dark():
-        table_css = """
-        <style>
-        .modern-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            font-size: 14px;
-            border-radius: 8px;
-            overflow: hidden;
-            background: #1c1f26;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-        }
-        /* Column header row: orange titles on dark background */
-        .modern-table thead { background: #1c1f26; }
-        .modern-table thead th {
-            color: #ff4b4b;
-            padding: 14px 16px; text-align: left; font-weight: 600;
-            text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px;
-            border-bottom: 2px solid #ff4b4b;
-        }
-        .modern-table tbody tr { border-bottom: 1px solid #30363d; transition: background-color 0.2s ease; }
-        .modern-table tbody tr:hover { background-color: rgba(255, 75, 75, 0.18); }
-        .modern-table tbody td { padding: 12px 16px; border-bottom: 1px solid #30363d; }
-        .modern-table tbody tr:nth-child(even) td { background-color: #2a1d1d; }
-        .modern-table a { color: #ff4b4b; text-decoration: none; }
-        .modern-table a:hover { text-decoration: underline; }
-        </style>
-        """
-    else:
-        table_css = """
-        <style>
-        .modern-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            font-size: 14px;
-            border-radius: 8px;
-            overflow: hidden;
-            background: #ffffff;
-            color: #262730;
-            border: 1px solid #e0e0e0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-        .modern-table thead { background: #ff4b4b; color: #ffffff; }
-        .modern-table thead th {
-            padding: 14px 16px; text-align: left; font-weight: 600;
-            text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px;
-        }
-        .modern-table tbody tr { border-bottom: 1px solid #e0e0e0; transition: background-color 0.2s ease; }
-        .modern-table tbody tr:hover { background-color: rgba(255, 75, 75, 0.08); }
-        .modern-table tbody td { padding: 12px 16px; }
-        .modern-table tbody tr:nth-child(even) td { background-color: #fff7f5; }
-        .modern-table a { color: #ff4b4b; text-decoration: none; font-weight: 500; }
-        .modern-table a:hover { text-decoration: underline; }
-        </style>
-        """
-
-    if styled_html_needed:
+        if is_dark():
+            table_css = """
+            <style>
+            .modern-table {width:100%;border-collapse:collapse;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;border-radius:8px;overflow:hidden;background:#1c1f26;color:#e6edf3;border:1px solid #30363d;}
+            .modern-table thead { background:#1c1f26; }
+            .modern-table thead th {color:#ff4b4b;padding:14px 16px;text-align:left;font-weight:600;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;border-bottom:2px solid #ff4b4b;}
+            .modern-table tbody tr {border-bottom:1px solid #30363d;transition:background-color .2s ease;}
+            .modern-table tbody tr:hover {background-color:rgba(255,75,75,0.18);}
+            .modern-table tbody td {padding:12px 16px;border-bottom:1px solid #30363d;}
+            .modern-table tbody tr:nth-child(even) td {background-color:#2a1d1d;}
+            .modern-table a {color:#ff4b4b;text-decoration:none;}
+            .modern-table a:hover {text-decoration:underline;}
+            </style>
+            """
+        else:
+            table_css = """
+            <style>
+            .modern-table {width:100%;border-collapse:collapse;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;border-radius:8px;overflow:hidden;background:#ffffff;color:#262730;border:1px solid #e0e0e0;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+            .modern-table thead {background:#ff4b4b;color:#ffffff;}
+            .modern-table thead th {padding:14px 16px;text-align:left;font-weight:600;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;}
+            .modern-table tbody tr {border-bottom:1px solid #e0e0e0;transition:background-color .2s ease;}
+            .modern-table tbody tr:hover {background-color:rgba(255,75,75,0.08);}
+            .modern-table tbody td {padding:12px 16px;}
+            .modern-table tbody tr:nth-child(even) td {background-color:#fff7f5;}
+            .modern-table a {color:#ff4b4b;text-decoration:none;font-weight:500;}
+            .modern-table a:hover {text-decoration:underline;}
+            </style>
+            """
         st.markdown(table_css, unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)
 
