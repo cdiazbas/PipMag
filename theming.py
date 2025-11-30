@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from streamlit import components as _components
 
 
 THEME_STATE_KEY = "ui_theme"
@@ -38,7 +39,8 @@ def init_theme(default: str | None = None) -> None:
     default: override default base ("light" or "dark"). If None, read from config.
     """
     if THEME_STATE_KEY not in st.session_state:
-        base = default or (st.get_option("theme.base") or "light")
+        # Prefer explicit default, else Streamlit config, else dark as global default
+        base = "dark"
         st.session_state[THEME_STATE_KEY] = base.lower()
 
 
@@ -64,8 +66,10 @@ def render_theme_toggle(position: str = "header") -> None:
         st.session_state[THEME_STATE_KEY] = "dark" if dark else "light"
 
     if position == "header":
+        # Reduced spacer to bring content closer to top while keeping toggle clickable.
         cols = st.columns([1, 1, 1, 1, 1])
         with cols[-1]:
+            st.markdown("<div style='height:0.0rem'></div>", unsafe_allow_html=True)
             st.toggle(
                 "Dark mode",
                 value=is_dark(),
@@ -73,12 +77,69 @@ def render_theme_toggle(position: str = "header") -> None:
                 help="Toggle between light and dark mode",
             )
     else:
+        # Add a small spacer to move the inline toggle down
+        st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
         st.toggle(
             "Dark mode",
             value=is_dark(),
             on_change=lambda: set_theme(not is_dark()),
             help="Toggle between light and dark mode",
         )
+
+def render_theme_toggle_sidebar() -> None:
+    """Render the dark mode toggle inside the Streamlit sidebar."""
+    init_theme()
+
+    def set_theme(dark: bool):
+        st.session_state[THEME_STATE_KEY] = "dark" if dark else "light"
+
+    with st.sidebar:
+        # st.markdown("### Appearance")
+        st.toggle(
+            "Dark mode",
+            value=is_dark(),
+            on_change=lambda: set_theme(not is_dark()),
+            help="Toggle between light and dark mode",
+        )
+
+def render_theme_toggle_floating(top: str = "2rem", right: str = "2rem") -> None:
+    """Render a dark mode toggle that is fixed-positioned and does not affect layout flow.
+
+    top/right: CSS offsets from viewport edges.
+    This avoids column/layout shifts by absolutely positioning a wrapper.
+    """
+    init_theme()
+
+    def set_theme(dark: bool):
+        st.session_state[THEME_STATE_KEY] = "dark" if dark else "light"
+
+        # True floating toggle rendered via HTML component that does not affect layout flow
+        current_dark = is_dark()
+        bg = "rgba(0,0,0,0.35)" if current_dark else "rgba(255,255,255,0.65)"
+        border = "rgba(255,255,255,0.25)" if current_dark else "rgba(0,0,0,0.15)"
+        text_color = "#E6EDF3" if current_dark else "#1F2328"
+        checked_attr = "checked" if current_dark else ""
+        html = """
+        <div id=\"floating-theme-toggle\" style=\"position: fixed; top: {top}; right: {right}; z-index: 10000;\">
+            <label style=\"display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:24px; backdrop-filter: blur(6px); background: {bg}; border: 1px solid {border}; color: {text_color}; font-size: 0.8rem;\">
+                <input id=\"toggle-input\" type=\"checkbox\" {checked_attr} style=\"transform: scale(1.1);\"/>
+                <span>Dark mode</span>
+            </label>
+            <script>
+                const input = document.getElementById('toggle-input');
+                input.addEventListener('change', () => {
+                    const value = input.checked ? 'dark' : 'light';
+                    if (window.Streamlit && window.Streamlit.setComponentValue) {
+                        window.Streamlit.setComponentValue(value);
+                    }
+                });
+            </script>
+        </div>
+        """.format(top=top, right=right, bg=bg, border=border, text_color=text_color, checked_attr=checked_attr)
+        # Render with minimal height; content is fixed-positioned and won't affect layout.
+        value = _components.v1.html(html, height=1, width=0)
+        if isinstance(value, str) and value in ("dark", "light"):
+                st.session_state[THEME_STATE_KEY] = value
 
 
 def apply_theme_css() -> None:
@@ -87,6 +148,14 @@ def apply_theme_css() -> None:
     if is_dark():
         css = """
         <style>
+        /* Ultra-tight top spacing */
+        [data-testid="stAppViewContainer"] > .main, .block-container {
+            padding-top: 0.0rem !important;
+        }
+        h1 { margin-top: 0.05rem !important; margin-bottom: 0.25rem !important; }
+        h2 { margin-top: 0.05rem !important; margin-bottom: 0.25rem !important; }
+        /* Remove default top gap occasionally injected */
+        div[data-testid="stToolbar"] + div:empty { display: none !important; }
         /* Base backgrounds and text */
         html, body, [data-testid="stAppViewContainer"], .main, .block-container {
             background-color: #0e1117 !important;
@@ -103,6 +172,10 @@ def apply_theme_css() -> None:
         [data-testid="stSidebar"] .element-container {
             background-color: #262730 !important;
             color: #fafafa !important;
+        }
+        /* Reduce sidebar top padding to bring content closer to top */
+        section[data-testid="stSidebar"] > div {
+            padding-top: 0.5rem !important;
         }
         
         /* Text elements - comprehensive */
@@ -332,6 +405,13 @@ def apply_theme_css() -> None:
     else:
         css = """
         <style>
+        /* Ultra-tight top spacing */
+        [data-testid="stAppViewContainer"] > .main, .block-container {
+            padding-top: 0.25rem !important;
+        }
+        h1 { margin-top: 0.05rem !important; margin-bottom: 0.25rem !important; }
+        h2 { margin-top: 0.40rem !important; margin-bottom: 0.25rem !important; }
+        div[data-testid="stToolbar"] + div:empty { display: none !important; }
         /* Base backgrounds and text */
         html, body, [data-testid="stAppViewContainer"], .main {
             background-color: #ffffff !important;
@@ -344,6 +424,10 @@ def apply_theme_css() -> None:
             background-color: #f0f2f6 !important;
             color: #262730 !important;
         }
+        /* Reduce sidebar top padding to bring content closer to top */
+        section[data-testid="stSidebar"] > div {
+            padding-top: 0.5rem !important;
+        }
         
         /* Links */
         a { color: #0066cc !important; }
@@ -351,3 +435,22 @@ def apply_theme_css() -> None:
         </style>
         """
     st.markdown(css, unsafe_allow_html=True)
+
+
+def setup_theme(floating: bool = False, top: str = "1rem", right: str = "1rem", location: str = "sidebar") -> None:
+    """Convenience helper to initialize theme, apply CSS, and render toggle.
+
+    floating: if True, use floating toggle; else use header toggle.
+    top/right: offsets for floating toggle.
+    """
+    init_theme()
+    apply_theme_css()
+    if floating:
+        render_theme_toggle_floating(top=top, right=right)
+    else:
+        if location == "sidebar":
+            render_theme_toggle_sidebar()
+        elif location == "header":
+            render_theme_toggle(position="header")
+        else:
+            render_theme_toggle(position=None)

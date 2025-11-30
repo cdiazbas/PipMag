@@ -9,3 +9,4 @@ Requests
 setuptools
 streamlit
 altair
+plotly
