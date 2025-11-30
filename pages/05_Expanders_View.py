@@ -9,6 +9,13 @@ import sys
 from datetime import time
 from typing import Any
 
+# Optional: requests for connectivity test
+try:
+    import requests  # type: ignore
+    HAS_REQUESTS = True
+except Exception:  # pragma: no cover
+    HAS_REQUESTS = False
+
 import pandas as pd
 import streamlit as st
 
@@ -20,6 +27,13 @@ home_module = importlib.util.module_from_spec(spec)
 sys.modules["home_module"] = home_module
 spec.loader.exec_module(home_module)
 load_data = home_module.load_data
+
+
+# Test image URL to diagnose HTTPS/media loading issues
+TEST_IMG_URL = (
+    "https://dubshen.astro.su.se/sst_archive/media/thumbnails/"
+    "nb_6173_2025-05-18T081134_0811340-38_stokes_corrected_export2025-11-27T092904_im.png"
+)
 
 
 def _normalize_lists(df: pd.DataFrame) -> pd.DataFrame:
@@ -119,6 +133,18 @@ def main():
 
     st.title("📂 Data Query - Modo Expansor")
 
+    # TEST DE CONECTIVIDAD (debug)
+    test_url = "http://tsih3.uio.no/lapalma/2023/2023-09-02//12:30:25/Crisp-R_quick_2023-09-02_12:30:25.jpg"
+    st.write("Testeando conexión...")
+    if HAS_REQUESTS:
+        try:
+            response = requests.head(test_url, timeout=10)
+            st.success(f"✅ Servidor responde: {response.status_code}")
+        except Exception as e:  # pragma: no cover
+            st.error(f"❌ No se puede conectar: {e}")
+    else:
+        st.warning("Paquete 'requests' no disponible para prueba de conexión.")
+
     df = load_data()
     if df.empty:
         st.stop()
@@ -134,6 +160,8 @@ def main():
         keyword = st.text_input("🔍 Buscar en target/comments", value="", placeholder="Ej: Sun, Venus, prom12")
         pol_mode = st.selectbox("Polarimetry", options=["All", "True", "False"], index=0)
         max_items = st.slider("Máx. resultados visibles", 5, 200, 50)
+        force_test_image = st.checkbox("Forzar 1ª imagen (debug HTTPS)", value=False,
+                          help="Sobrescribe la primera fila con una miniatura HTTPS conocida para probar conectividad/mixto contenido.")
 
     result_df = df.copy()
     if start_date:
@@ -173,6 +201,12 @@ def main():
         result_df = result_df.sort_values("date_time", ascending=False)
 
     result_df = result_df.head(max_items)
+
+    # Optional: force first primary image to known HTTPS test URL for diagnostics
+    if force_test_image and not result_df.empty:
+        result_df.loc[result_df.index[0], 'primary_image'] = TEST_IMG_URL
+        print("DEBUG: Primera imagen forzada a URL de prueba HTTPS.")
+        print(result_df.loc[result_df.index[0]])
 
     st.subheader(f"📋 Resultados ({len(result_df)} observaciones)")
 
