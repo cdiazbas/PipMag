@@ -23,6 +23,18 @@ spec.loader.exec_module(home_module)
 load_data = home_module.load_data
 
 
+def safe_thumbnail(url: str, w: int = 120) -> str:
+    """Return a CDN thumbnail for http images; otherwise return original URL.
+
+    Uses images.weserv.nl to proxy and resize insecure http images so they
+    render safely in browsers/Streamlit. Keeps https and non-string values as-is.
+    """
+    if isinstance(url, str) and url.startswith("http://"):
+        clean_url = url.replace("http://", "")
+        return f"https://images.weserv.nl/?url={clean_url}&w={w}"
+    return url
+
+
 def _normalize_lists(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     # Ensure datetime parts exist
@@ -263,13 +275,16 @@ def main():
             display_df["primary_video"] = display_df["primary_video"].fillna("")
         if "primary_image" in display_df.columns:
             display_df["primary_image"] = display_df["primary_image"].fillna("")
+            # Build safe thumbnail column from primary_image
+            display_df["thumb"] = display_df["primary_image"].apply(lambda u: safe_thumbnail(u, w=120))
         display_df["ver_detalle"] = "🔍 Ver"
 
         column_config = {}
         if "date_time" in display_df.columns:
             column_config["date_time"] = st.column_config.DatetimeColumn("Date & Time", format="YYYY-MM-DD HH:mm:ss")
-        if "primary_image" in display_df.columns:
-            column_config["primary_image"] = st.column_config.ImageColumn("Preview", width="small")
+        # Use thumbnail column for image preview if available
+        if "thumb" in display_df.columns:
+            column_config["thumb"] = st.column_config.ImageColumn("Preview", width="small")
         if "instruments" in display_df.columns:
             column_config["instruments"] = st.column_config.TextColumn("Instruments", width="medium")
         if "target" in display_df.columns:
@@ -329,7 +344,8 @@ def main():
                 val = row.get(col)
                 if col == "primary_image":
                     if isinstance(val, str) and val:
-                        cell = f'<a href="{htmlesc.escape(val)}" target="_blank" rel="noopener noreferrer"><img loading="lazy" style="border-radius:4px;background:#000;width:80px;height:60px;object-fit:cover" src="{htmlesc.escape(val)}" alt="Preview image"></a>'
+                        thumb = safe_thumbnail(val, w=120)
+                        cell = f'<a href="{htmlesc.escape(val)}" target="_blank" rel="noopener noreferrer"><img loading="lazy" style="border-radius:4px;background:#000;width:80px;height:60px;object-fit:cover" src="{htmlesc.escape(thumb)}" alt="Preview image"></a>'
                     else:
                         cell = ""
                 elif col == "primary_video":
