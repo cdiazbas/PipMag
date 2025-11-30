@@ -18,9 +18,9 @@ def main() -> None:
     with st.sidebar:
         st.page_link('streamlit_app.py', label='Home', icon='🔭')
         st.page_link('pages/02_Data_Query.py', label='Data Query', icon='🔎')
-        st.page_link('pages/03_Modal_Query.py', label='Modal Query', icon='💬')
-        st.page_link('pages/04_Sidebar_Detail.py', label='Sidebar Detail', icon='📋')
-        st.page_link('pages/05_Expanders_View.py', label='Expanders View', icon='📂')
+        # st.page_link('pages/03_Modal_Query.py', label='Modal Query', icon='💬')
+        # st.page_link('pages/04_Sidebar_Detail.py', label='Sidebar Detail', icon='📋')
+        # st.page_link('pages/05_Expanders_View.py', label='Expanders View', icon='📂')
         # Horizontal line for separation
         st.markdown('<hr style="border: none; border-top: 2px solid #444; margin: 12px 0;">', unsafe_allow_html=True)
     

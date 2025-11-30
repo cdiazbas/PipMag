@@ -201,8 +201,8 @@ def main():
     # (Summary metrics removed per request)
 
     st.subheader("Query Results")
-    view_mode = st.radio("Table display", ["Interactive", "Styled"], index=0, horizontal=True)
-    st.caption("Interactive: selección + modal | Styled: tabla compacta con enlaces.")
+    # view_mode = st.radio("Table display", ["Interactive", "Styled"], index=0, horizontal=True)
+    # st.caption("Interactive: selección + modal | Styled: tabla compacta con enlaces.")
 
     # Build media columns (shared by both modes)
     base_df = result_df.copy()
@@ -261,6 +261,7 @@ def main():
     # Columns for styled mode (include additional media)
     styled_cols = [c for c in ["date_time", "instruments", "target", "comments", "polarimetry", "primary_image", "primary_video", "additional_images", "additional_movies"] if c in base_df.columns]
 
+    view_mode = "Styled"  # Force styled mode for testing
     if view_mode == "Interactive":
         display_columns = [c for c in ["date_time", "instruments", "target", "comments", "polarimetry", "primary_image", "primary_video"] if c in base_df.columns]
         display_df = base_df[display_columns].copy()
