@@ -155,7 +155,11 @@ def main():
 
     # (Summary metrics removed per request)
 
-    # Styled HTML table (exactly like Home)
+    # Table display toggle
+    st.subheader("Query Results")
+    view_mode = st.radio("Table display", ["Interactive", "Styled"], index=1, horizontal=True)
+
+    # Styled HTML table (exactly like Home, plus media) or Interactive DataFrame
     base_cols = [c for c in ["date_time", "instruments", "target", "comments", "polarimetry"] if c in result_df.columns]
     base_df = result_df.copy()
 
@@ -214,14 +218,92 @@ def main():
         base_df = base_df.sort_values("date_time", ascending=False)
 
     display_df = base_df[base_cols].copy()
-    if "date_time" in display_df.columns:
-        display_df["date_time"] = pd.to_datetime(display_df["date_time"], errors="coerce").dt.strftime("%Y-%m-%d %H:%M:%S")
-    if "instruments" in display_df.columns:
-        display_df["instruments"] = display_df["instruments"].apply(lambda x: ", ".join(x) if isinstance(x, list) else ("" if pd.isna(x) else str(x)))
-    if "polarimetry" in display_df.columns:
-        display_df["polarimetry"] = display_df["polarimetry"].apply(lambda x: "✓" if str(x) == "True" else "✗")
+    if view_mode == "Interactive":
+        interactive_df = display_df.copy()
+        # Convert datetime to actual datetime dtype
+        if "date_time" in interactive_df.columns:
+            interactive_df["date_time"] = pd.to_datetime(interactive_df["date_time"], errors="coerce")
+        # Instruments as comma string
+        if "instruments" in interactive_df.columns:
+            interactive_df["instruments"] = interactive_df["instruments"].apply(lambda x: ", ".join(x) if isinstance(x, list) else ("" if pd.isna(x) else str(x)))
+        # Polarimetry to bool for CheckboxColumn
+        if "polarimetry" in interactive_df.columns:
+            interactive_df["polarimetry"] = interactive_df["polarimetry"].astype(str) == "True"
+        # Additional images/movies condensed (limit by max_additional_sources)
+        if "additional_images" in interactive_df.columns:
+            interactive_df["additional_images"] = interactive_df["additional_images"].apply(
+                lambda lst: ", ".join(lst[:max_additional_sources]) + (f" (+{len(lst)-max_additional_sources})" if len(lst) > max_additional_sources else "") if isinstance(lst, list) and lst else ""
+            )
+        if "additional_movies" in interactive_df.columns:
+            interactive_df["additional_movies"] = interactive_df["additional_movies"].apply(
+                lambda lst: ", ".join(lst[:max_additional_sources]) + (f" (+{len(lst)-max_additional_sources})" if len(lst) > max_additional_sources else "") if isinstance(lst, list) and lst else ""
+            )
+        # Primary video as link text
+        if "primary_video" in interactive_df.columns:
+            interactive_df["primary_video"] = interactive_df["primary_video"].fillna("")
+        # Image column: keep raw URL string (Streamlit handles rendering)
+        if "primary_image" in interactive_df.columns:
+            interactive_df["primary_image"] = interactive_df["primary_image"].fillna("")
 
-    label_map = {
+        # Column configuration
+        column_config = {}
+        if "date_time" in interactive_df.columns:
+            column_config["date_time"] = st.column_config.DatetimeColumn("Date & Time", format="YYYY-MM-DD HH:mm:ss")
+        if "primary_image" in interactive_df.columns:
+            column_config["primary_image"] = st.column_config.ImageColumn("Preview", width="small")
+        if "instruments" in interactive_df.columns:
+            column_config["instruments"] = st.column_config.TextColumn("Instruments", width="medium")
+        if "target" in interactive_df.columns:
+            column_config["target"] = st.column_config.TextColumn("Target", width="medium")
+        if "comments" in interactive_df.columns:
+            column_config["comments"] = st.column_config.TextColumn("Comments", width="large")
+        if "polarimetry" in interactive_df.columns:
+            column_config["polarimetry"] = st.column_config.CheckboxColumn("Polarimetry", width="small")
+        if "primary_video" in interactive_df.columns:
+            column_config["primary_video"] = st.column_config.LinkColumn("Video", display_text="🎬 Play")
+        if "additional_images" in interactive_df.columns:
+            column_config["additional_images"] = st.column_config.TextColumn("Additional images", width="large")
+        if "additional_movies" in interactive_df.columns:
+            column_config["additional_movies"] = st.column_config.TextColumn("Additional movies", width="large")
+
+        # Compact styling (reuse dark/light CSS concept without HTML overrides)
+        if is_dark():
+            grid_css = """
+            <style>
+            [data-testid="stDataFrame"] td,[data-testid="stDataFrame"] th,[data-testid="stDataFrame"] [role="gridcell"],[data-testid="stDataFrame"] [role="columnheader"] {padding:6px 8px !important;font-size:13px !important;line-height:1.2 !important;}
+            [data-testid="stDataFrame"] tbody tr:first-child td {background-color: rgba(255,75,75,0.18) !important;}
+            </style>
+            """
+        else:
+            grid_css = """
+            <style>
+            [data-testid="stDataFrame"] td,[data-testid="stDataFrame"] th,[data-testid="stDataFrame"] [role="gridcell"],[data-testid="stDataFrame"] [role="columnheader"] {padding:6px 8px !important;font-size:13px !important;line-height:1.2 !important;}
+            [data-testid="stDataFrame"] tbody tr:first-child td {background-color: rgba(255,75,75,0.08) !important;}
+            </style>
+            """
+        st.markdown(grid_css, unsafe_allow_html=True)
+
+        # Dynamic height
+        rows = len(interactive_df)
+        height = min(720, 44 + rows * 28)
+        st.data_editor(
+            interactive_df,
+            column_config=column_config,
+            hide_index=True,
+            disabled=True,
+            width='stretch',
+            height=height,
+        )
+        # Skip styled HTML rendering
+        styled_html_needed = False
+    else:
+        styled_html_needed = True
+
+    if not styled_html_needed:
+        # HTML table skipped for Interactive mode
+        pass
+    else:
+        label_map = {
         "date_time": "Date & Time",
         "instruments": "Instruments",
         "target": "Target",
@@ -231,55 +313,62 @@ def main():
         "primary_video": "Preview movie",
         "additional_images": "Additional images",
         "additional_movies": "Additional movies",
-    }
+        }
     # Ensure preview image/movie first, additional images/movies last
     preview_first = ["primary_image", "primary_video"]
     other_cols = [c for c in base_cols if c in display_df.columns and c not in preview_first and c not in ["additional_images", "additional_movies"]]
     ordered_cols = preview_first + other_cols + [c for c in ["additional_images", "additional_movies"] if c in display_df.columns]
     header_cells = ''.join(f"<th>{htmlesc.escape(label_map.get(col, col))}</th>" for col in ordered_cols)
 
-    rows_html_parts: List[str] = []
-    for _, row in display_df.iterrows():
-        tds = []
-        for col in ordered_cols:
-            val = row.get(col)
-            if col == "primary_image":
-                if isinstance(val, str) and val:
-                    cell = f'<a href="{htmlesc.escape(val)}" target="_blank" rel="noopener noreferrer"><img loading="lazy" style="border-radius:4px;background:#000;width:80px;height:60px;object-fit:cover" src="{htmlesc.escape(val)}" alt="Preview image"></a>'
+    if styled_html_needed:
+        rows_html_parts: List[str] = []
+        # Format display_df for styled mode
+        if "date_time" in display_df.columns:
+            display_df["date_time"] = pd.to_datetime(display_df["date_time"], errors="coerce").dt.strftime("%Y-%m-%d %H:%M:%S")
+        if "instruments" in display_df.columns:
+            display_df["instruments"] = display_df["instruments"].apply(lambda x: ", ".join(x) if isinstance(x, list) else ("" if pd.isna(x) else str(x)))
+        if "polarimetry" in display_df.columns:
+            display_df["polarimetry"] = display_df["polarimetry"].apply(lambda x: "✓" if str(x) == "True" else "✗")
+        for _, row in display_df.iterrows():
+            tds = []
+            for col in ordered_cols:
+                val = row.get(col)
+                if col == "primary_image":
+                    if isinstance(val, str) and val:
+                        cell = f'<a href="{htmlesc.escape(val)}" target="_blank" rel="noopener noreferrer"><img loading="lazy" style="border-radius:4px;background:#000;width:80px;height:60px;object-fit:cover" src="{htmlesc.escape(val)}" alt="Preview image"></a>'
+                    else:
+                        cell = ""
+                elif col == "primary_video":
+                    if isinstance(val, str) and val:
+                        play_icon = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI2MCIgdmlld0JveD0iMCAwIDgwIDYwIj48cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iNjAiIHJ4PSI4IiBmaWxsPSIjMDAwIi8+PHBvbHlnb24gcG9pbnRzPSIzMiwyMCAzMiw0MCA0OCwzMCIgZmlsbD0iI2ZmNGI0YiIvPjwvc3ZnPg=="
+                        cell = f'<a href="{htmlesc.escape(val)}" target="_blank" rel="noopener noreferrer"><img loading="lazy" style="border-radius:4px;width:80px;height:60px;object-fit:cover" src="{play_icon}" alt="Preview movie"></a>'
+                    else:
+                        cell = ""
+                elif col == "additional_images":
+                    links = val if isinstance(val, list) else []
+                    if links:
+                        parts = []
+                        for u in links[:int(max_additional_sources)]:
+                            parts.append(f'<a href="{htmlesc.escape(u)}" target="_blank" rel="noopener noreferrer">image</a>')
+                        more = len(links) - len(parts)
+                        cell = ", ".join(parts) + (f" (+{more} more)" if more > 0 else "")
+                    else:
+                        cell = ""
+                elif col == "additional_movies":
+                    links = val if isinstance(val, list) else []
+                    if links:
+                        parts = []
+                        for u in links[:int(max_additional_sources)]:
+                            parts.append(f'<a href="{htmlesc.escape(u)}" target="_blank" rel="noopener noreferrer">movie</a>')
+                        more = len(links) - len(parts)
+                        cell = ", ".join(parts) + (f" (+{more} more)" if more > 0 else "")
+                    else:
+                        cell = ""
                 else:
-                    cell = ""
-            elif col == "primary_video":
-                if isinstance(val, str) and val:
-                    play_icon = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI2MCIgdmlld0JveD0iMCAwIDgwIDYwIj48cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iNjAiIHJ4PSI4IiBmaWxsPSIjMDAwIi8+PHBvbHlnb24gcG9pbnRzPSIzMiwyMCAzMiw0MCA0OCwzMCIgZmlsbD0iI2ZmNGI0YiIvPjwvc3ZnPg=="
-                    cell = f'<a href="{htmlesc.escape(val)}" target="_blank" rel="noopener noreferrer"><img loading="lazy" style="border-radius:4px;width:80px;height:60px;object-fit:cover" src="{play_icon}" alt="Preview movie"></a>'
-                else:
-                    cell = ""
-            elif col == "additional_images":
-                links = val if isinstance(val, list) else []
-                if links:
-                    parts = []
-                    for u in links[:int(max_additional_sources)]:
-                        parts.append(f'<a href="{htmlesc.escape(u)}" target="_blank" rel="noopener noreferrer">image</a>')
-                    more = len(links) - len(parts)
-                    cell = ", ".join(parts) + (f" (+{more} more)" if more > 0 else "")
-                else:
-                    cell = ""
-            elif col == "additional_movies":
-                links = val if isinstance(val, list) else []
-                if links:
-                    parts = []
-                    for u in links[:int(max_additional_sources)]:
-                        parts.append(f'<a href="{htmlesc.escape(u)}" target="_blank" rel="noopener noreferrer">movie</a>')
-                    more = len(links) - len(parts)
-                    cell = ", ".join(parts) + (f" (+{more} more)" if more > 0 else "")
-                else:
-                    cell = ""
-            else:
-                cell = htmlesc.escape("" if pd.isna(val) else str(val))
-            tds.append(f"<td>{cell}</td>")
-        rows_html_parts.append(f"<tr>{''.join(tds)}</tr>")
-
-    table_html = f"<table class='modern-table'><thead><tr>{header_cells}</tr></thead><tbody>{''.join(rows_html_parts)}</tbody></table>"
+                    cell = htmlesc.escape("" if pd.isna(val) else str(val))
+                tds.append(f"<td>{cell}</td>")
+            rows_html_parts.append(f"<tr>{''.join(tds)}</tr>")
+        table_html = f"<table class='modern-table'><thead><tr>{header_cells}</tr></thead><tbody>{''.join(rows_html_parts)}</tbody></table>"
 
     if is_dark():
         table_css = """
@@ -340,8 +429,9 @@ def main():
         </style>
         """
 
-    st.markdown(table_css, unsafe_allow_html=True)
-    st.markdown(table_html, unsafe_allow_html=True)
+    if styled_html_needed:
+        st.markdown(table_css, unsafe_allow_html=True)
+        st.markdown(table_html, unsafe_allow_html=True)
 
     # Export (match 03)
     st.subheader("Export Results")
