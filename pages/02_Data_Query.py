@@ -15,6 +15,9 @@ import streamlit as st
 
 from theming import init_theme, setup_theme, is_dark
 
+# Per-page configuration: title and icon (avoid changing layout/sidebar globally)
+st.set_page_config(page_title="Data Query", page_icon="🔎")
+
 # Import load_data from 01_Home.py
 spec = importlib.util.spec_from_file_location("home_module", "pages/01_Home.py")
 home_module = importlib.util.module_from_spec(spec)

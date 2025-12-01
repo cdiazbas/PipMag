@@ -210,9 +210,17 @@ def build_ui(df: pd.DataFrame) -> None:
         y_max = int(pd.to_numeric(df["year"], errors="coerce").max()) if df["year"].notna().any() else 2025
         years = st.slider("Years", y_min, y_max, (y_min, y_max))
 
-        # Collect instrument options
+        # Collect instrument options robustly (handle NaN/non-list entries)
+        def as_list(x):
+            if isinstance(x, list):
+                return x
+            if pd.isna(x) or x is None:
+                return []
+            if isinstance(x, str):
+                return [x]
+            return []
         if "instruments" in df.columns:
-            all_instr = sorted({i for row in df["instruments"] for i in (row or [])})
+            all_instr = sorted({i for row in df["instruments"].apply(as_list) for i in row})
         else:
             all_instr = []
 
@@ -226,9 +234,8 @@ def build_ui(df: pd.DataFrame) -> None:
 
     if selected_instr and "instruments" in df_f.columns:
         sel_set = set(selected_instr)
-        df_f = df_f[df_f["instruments"].apply(lambda xs: bool(sel_set.intersection(xs)))]
+        df_f = df_f[df_f["instruments"].apply(lambda xs: bool(sel_set.intersection(xs if isinstance(xs, list) else [])))]
 
-    # Polarimetry filtering removed per request
 
     # Summary stats (card style)
     st.subheader("Summary")
@@ -244,6 +251,9 @@ def build_ui(df: pd.DataFrame) -> None:
     st.subheader("Observations per year by instrument")
     if not df_f.empty and "instruments" in df_f.columns:
         df_exp = df_f[["year", "instruments"]].explode("instruments")
+        # After exploding, restrict to selected instruments so the plot matches the filter
+        if selected_instr:
+            df_exp = df_exp[df_exp["instruments"].isin(selected_instr)]
         df_exp = df_exp.dropna(subset=["instruments", "year"]).copy()
         df_counts = (
             df_exp.groupby(["year", "instruments"], dropna=True).size().reset_index(name="count")
