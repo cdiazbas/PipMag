@@ -235,10 +235,6 @@ def build_ui(df: pd.DataFrame) -> None:
     if selected_instr and "instruments" in df_f.columns:
         sel_set = set(selected_instr)
         df_f = df_f[df_f["instruments"].apply(lambda xs: bool(sel_set.intersection(xs if isinstance(xs, list) else [])))]
-
-
-    # Summary stats (card style)
-    st.subheader("Summary")
     c1, c2, c3 = st.columns(3)
     with c1:
         st.metric("Observations", len(df_f))
@@ -288,6 +284,81 @@ def build_ui(df: pd.DataFrame) -> None:
         st.altair_chart(chart, width='stretch')
     else:
         st.info("No instrument data available for charting.")
+
+
+    # Heatmap: observations distribution by year vs month/day
+    st.subheader("Observations heatmap")
+    if not df_f.empty:
+        df_dates = df_f[["date_time"]].dropna().copy()
+        df_dates["year"] = df_dates["date_time"].dt.year
+        df_dates["month"] = df_dates["date_time"].dt.month
+        # Month abbreviations for cleaner y-axis
+        df_dates["month_abbr"] = df_dates["date_time"].dt.strftime('%b')
+        df_heat = (
+            df_dates.groupby(["year", "month_abbr"], dropna=True)
+            .size()
+            .reset_index(name="count")
+        )
+
+        # GitHub-like green palette from low → high activity
+        # Orange-forward palette (light → strong) aligned with app's main orange
+        # Automatic thresholds from data distribution (quantiles)
+        counts = df_heat["count"].astype(float)
+        if len(counts) > 0:
+            q = counts.quantile([0.10, 0.30, 0.50, 0.70, 0.99]).tolist()
+            # Build bin edges from 0 to max with quantiles as interior points
+            min_edge = 0.0
+            max_edge = float(counts.max()) if counts.max() > 0 else 1.0
+            edges = [min_edge]
+            for v in q:
+                v = float(v)
+                if v <= edges[-1]:
+                    v = edges[-1] + 1.0
+                if v < max_edge:
+                    edges.append(v)
+            edges.append(max_edge)
+        else:
+            edges = [0, 1, 3, 7, 12, 25, 50]
+
+        # Color scale: two-stop gradient from light → strong #FF4B4B
+        light_orange = "#ffeadf"
+        strong_orange = "#FF4B4B"
+
+        # Continuous color scale: map min non-zero → light, max → strong orange
+        min_nonzero = float(counts[counts > 0].min()) if (counts > 0).any() else 1.0
+        max_val = float(counts.max()) if len(counts) else 1.0
+
+        heatmap = (
+            alt.Chart(df_heat)
+            .mark_square(size=700)
+            .encode(
+                x=alt.X("year:O", title="Year", sort="ascending", axis=alt.Axis(labelAngle=0)),
+                y=alt.Y("month_abbr:O", title="Month", sort=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]),
+                color=alt.Color(
+                    "count:Q",
+                    title="Observations",
+                    scale=alt.Scale(domain=[min_nonzero, max_val], range=[light_orange, strong_orange], clamp=True, interpolate='rgb'),
+                    legend=alt.Legend(orient='right', direction='vertical', gradientLength=160)
+                ),
+                tooltip=[alt.Tooltip("year:O", title="Year"), alt.Tooltip("month_abbr:O", title="Month"), alt.Tooltip("count:Q", title="Observations")],
+            )
+            .properties(height=260)
+        )
+
+        if is_dark():
+            heatmap = (
+                heatmap
+                .configure(background="#0e1117")
+                .configure_axis(labelColor="#fafafa", titleColor="#fafafa", grid=False)
+            )
+        else:
+            heatmap = (
+                heatmap
+                .configure(background="#ffffff")
+                .configure_axis(grid=False)
+            )
+
+        st.altair_chart(heatmap, width='stretch')
 
 
 
