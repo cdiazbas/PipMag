@@ -87,6 +87,11 @@ def main():
         st.stop()
 
     df = _normalize_lists(df)
+    
+    # Store full dataset in session state for edit tracking
+    if "_full_dataset" not in st.session_state:
+        st.session_state["_full_dataset"] = df.copy()
+        st.session_state["_edits_made"] = False
 
     # Sidebar filters (match 03 minus instruments per request)
     with st.sidebar:
@@ -239,7 +244,7 @@ def main():
     # Columns for styled mode (include additional media)
     styled_cols = [c for c in ["date_time", "instruments", "target", "comments", "polarimetry", "primary_image", "primary_video", "additional_images", "additional_movies"] if c in base_df.columns]
 
-    view_mode = "Styled"  # Force styled mode for testing
+    view_mode = st.radio("Table display", ["Styled", "Edit"], index=0, horizontal=True)
     if view_mode == "Styled":
         # Styled (legacy HTML) – may be sanitized on Streamlit Cloud.
         display_df = base_df[styled_cols].copy()
@@ -337,6 +342,148 @@ def main():
             """
         st.markdown(table_css, unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)
+    else:
+        # Edit mode: use Streamlit's native data_editor for inline editing
+        
+        # Apply dark mode styling to data editor
+        if is_dark():
+            st.markdown("""
+            <style>
+            /* Dark mode for data editor */
+            div[data-testid="stDataFrame"] > div,
+            div[data-testid="stDataFrame"] table,
+            div[data-testid="stDataFrame"] tbody,
+            div[data-testid="stDataFrame"] thead {
+                background-color: #1c1f26 !important;
+            }
+            
+            div[data-testid="stDataFrame"] th {
+                background-color: #1c1f26 !important;
+                color: #ff4b4b !important;
+                border-bottom: 2px solid #ff4b4b !important;
+                font-weight: 600 !important;
+            }
+            
+            div[data-testid="stDataFrame"] td,
+            div[data-testid="stDataFrame"] th,
+            div[data-testid="stDataFrame"] input,
+            div[data-testid="stDataFrame"] span {
+                color: #e6edf3 !important;
+                border-color: #30363d !important;
+            }
+            
+            div[data-testid="stDataFrame"] tr:hover td {
+                background-color: rgba(255,75,75,0.12) !important;
+            }
+            
+            div[data-testid="stDataFrame"] input {
+                background-color: #0d1117 !important;
+            }
+            
+            div[data-testid="stDataFrame"] tr:nth-child(even) td {
+                background-color: #161b22 !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+        
+        st.caption("Double-click a cell to edit. Use the download below to save your changes.")
+        edit_df = base_df.copy()
+        # Keep primary media for preview, drop only helper columns
+        drop_cols = ["additional_images", "additional_movies", "time_obj"]
+        edit_df = edit_df[[c for c in edit_df.columns if c not in drop_cols]]
+        
+        # Reorder columns to put preview first
+        preview_cols = [c for c in ["primary_image", "primary_video"] if c in edit_df.columns]
+        other_cols = [c for c in edit_df.columns if c not in preview_cols]
+        edit_df = edit_df[preview_cols + other_cols]
+        
+        # Configure select boxes for short categorical columns
+        column_config = {}
+        for col in edit_df.columns:
+            # Skip columns containing list-like values (unhashable for unique)
+            sample_vals = edit_df[col].dropna().head(50).tolist()
+            has_list_values = any(isinstance(v, list) for v in sample_vals)
+            if has_list_values:
+                continue
+            if edit_df[col].dtype == object:
+                # Convert to strings to avoid unhashable types
+                str_series = edit_df[col].astype(str).dropna()
+                try:
+                    uniques = sorted(list(str_series.unique()))
+                except Exception:
+                    uniques = []
+                if 1 < len(uniques) <= 20:
+                    column_config[col] = st.column_config.SelectboxColumn(col, options=uniques)
+        if "date_time" in edit_df.columns:
+            # Use a DatetimeColumn compatible with pandas datetime dtype
+            column_config["date_time"] = st.column_config.DatetimeColumn("date_time")
+        
+        # Configure preview columns
+        if "primary_image" in edit_df.columns:
+            column_config["primary_image"] = st.column_config.ImageColumn("Preview Image", width="small")
+        if "primary_video" in edit_df.columns:
+            column_config["primary_video"] = st.column_config.LinkColumn("Preview Video", display_text="▶️ Video")
+
+        if "_edit_orig" not in st.session_state:
+            st.session_state["_edit_orig"] = edit_df.copy()
+
+        edited_df = st.data_editor(
+            edit_df,
+            width='stretch',
+            hide_index=True,
+            column_config=column_config,
+        )
+        
+        # Merge edits back into the full dataset by index
+        for idx in edited_df.index:
+            if idx in st.session_state["_full_dataset"].index:
+                for col in edited_df.columns:
+                    if col not in ["primary_image", "primary_video", "additional_images", "additional_movies"]:
+                        st.session_state["_full_dataset"].at[idx, col] = edited_df.at[idx, col]
+        st.session_state["_edits_made"] = True
+
+        # Show modified cell count
+        try:
+            modified_cells = edited_df.ne(st.session_state["_edit_orig"]).sum().sum()
+            st.caption(f"Modified cells: {int(modified_cells)}")
+        except Exception:
+            pass
+
+        # Download edited CSV
+        try:
+            csv_bytes = edited_df.to_csv(index=False).encode("utf-8")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    label="⬇️ Download edited CSV",
+                    data=csv_bytes,
+                    file_name="edited_data.csv",
+                    mime="text/csv",
+                    width='stretch',
+                )
+            with col2:
+                if st.button("💾 Save changes to database", type="primary", disabled=not st.session_state.get("_edits_made", False)):
+                    try:
+                        # Prepare dataset for saving - convert list columns to strings
+                        save_df = st.session_state["_full_dataset"].copy()
+                        for col in ["instruments", "target", "video_links", "image_links", "links"]:
+                            if col in save_df.columns:
+                                save_df[col] = save_df[col].apply(lambda x: ";".join(x) if isinstance(x, list) else x)
+                        
+                        # Remove derived columns
+                        drop_cols = [c for c in ["primary_image", "primary_video", "additional_images", "additional_movies", "time_obj"] if c in save_df.columns]
+                        save_df = save_df.drop(columns=drop_cols, errors='ignore')
+                        
+                        save_df.to_csv("data/la_palma_obs_data.csv", index=False)
+                        st.success("✅ Changes saved to data/la_palma_obs_data.csv")
+                        st.session_state["_edits_made"] = False
+                        # Clear cache to reload fresh data
+                        load_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error saving to CSV: {e}")
+        except Exception as e:
+            st.error(f"❌ Error preparing edited CSV: {e}")
 
     # Export (match 03)
     st.subheader("Export Results")

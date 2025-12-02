@@ -8,5 +8,6 @@ pandas
 Requests
 setuptools
 streamlit
+streamlit-aggrid
 altair
 plotly
