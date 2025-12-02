@@ -392,6 +392,10 @@ def main():
         drop_cols = ["additional_images", "additional_movies", "time_obj"]
         edit_df = edit_df[[c for c in edit_df.columns if c not in drop_cols]]
         
+        # Apply safe_thumbnail proxy to image URLs for web compatibility
+        if "primary_image" in edit_df.columns:
+            edit_df["primary_image"] = edit_df["primary_image"].apply(lambda x: safe_thumbnail(x, w=120) if pd.notna(x) else x)
+        
         # Reorder columns to put preview first
         preview_cols = [c for c in ["primary_image", "primary_video"] if c in edit_df.columns]
         other_cols = [c for c in edit_df.columns if c not in preview_cols]
