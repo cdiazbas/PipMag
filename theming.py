@@ -168,15 +168,21 @@ def apply_theme_css() -> None:
             background: transparent !important;
         }
         
-        /* Sidebar - all variations */
+        /* Sidebar - container surfaces only */
         [data-testid="stSidebar"], 
-        section[data-testid="stSidebar"] > div,
-        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
-        [data-testid="stSidebar"] .element-container {
+        section[data-testid="stSidebar"] > div {
             background-color: #23242b !important;
             color: #f3f3f3 !important;
             font-weight: 500 !important;
             transition: background 0.2s, color 0.2s;
+        }
+
+        /* Sidebar child containers: let parent background show through */
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+        [data-testid="stSidebar"] .element-container,
+        [data-testid="stSidebar"] a,
+        [data-testid="stSidebar"] [role="button"],
+        [data-testid="stSidebar"] [role="link"] {
         }
         
         /* Reduce sidebar top padding to bring content closer to top */
