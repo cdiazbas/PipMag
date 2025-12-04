@@ -115,6 +115,13 @@ def build_ui(df: pd.DataFrame) -> None:
     # Page-scoped styling
     st.markdown("""
     <style>
+    /* Reduce space above titles */
+    .stMainBlockContainer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-top: 2rem;
+    padding-bottom: 1rem;
+    }
     /* Accent underline for main title */
     h1:after {content: ""; display: block; width: 64px; height: 4px; background: #ff4b4b; margin-top: 8px; border-radius: 2px;}
     /* Card-like metrics */

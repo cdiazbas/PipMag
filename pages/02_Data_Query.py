@@ -52,7 +52,7 @@ def _normalize_lists(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    # Hide Streamlit's default sidebar navigation and highlight active custom link
+    # Hide Streamlit's default sidebar navigation, highlight active link, and reduce header margins
     st.markdown("""
     <style>
     [data-testid='stSidebarNav'] { display: none !important; }
@@ -63,6 +63,13 @@ def main():
         font-weight: bold;
         box-shadow: 0 2px 8px rgba(255,75,75,0.18);
         border-left: 6px solid #ffa63a;
+    }
+    /* Reduce space above titles */
+    .stMainBlockContainer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-top: 2rem;
+    padding-bottom: 1rem;
     }
     </style>
     """, unsafe_allow_html=True)
