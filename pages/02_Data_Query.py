@@ -13,8 +13,6 @@ import sys
 import pandas as pd
 import streamlit as st
 
-from theming import init_theme, setup_theme, is_dark
-
 # Per-page configuration: title and icon (avoid changing layout/sidebar globally)
 st.set_page_config(page_title="Data Query", page_icon="🔎")
 
@@ -54,8 +52,7 @@ def _normalize_lists(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    init_theme()
-    # Hide Streamlit's default sidebar navigation and highlight active custom link in dark mode
+    # Hide Streamlit's default sidebar navigation and highlight active custom link
     st.markdown("""
     <style>
     [data-testid='stSidebarNav'] { display: none !important; }
@@ -75,9 +72,7 @@ def main():
         st.page_link('streamlit_app.py', label='Home', icon='🔭')
         st.page_link('pages/02_Data_Query.py', label='Data Query', icon='🔎')
         # Horizontal line for separation
-        st.markdown('<hr style="border: none; border-top: 2px solid #444; margin: 12px 0;">', unsafe_allow_html=True)
-    
-    setup_theme()
+        st.markdown('<hr style="border: none; border-top: 2px solid currentColor; opacity: 0.3; margin: 12px 0;">', unsafe_allow_html=True)
 
     # st.title("🔎 Data Query")
     # st.caption("Filter observations with the styled HTML table from Home including lightweight preview thumbnails.")
@@ -312,79 +307,23 @@ def main():
                 tds.append(f"<td>{cell}</td>")
             rows_html_parts.append(f"<tr>{''.join(tds)}</tr>")
         table_html = f"<table class='modern-table'><thead><tr>{header_cells}</tr></thead><tbody>{''.join(rows_html_parts)}</tbody></table>"
-        if is_dark():
-            table_css = """
-            <style>
-            .modern-table {width:100%;border-collapse:collapse;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;border-radius:8px;overflow:hidden;background:#1c1f26;color:#e6edf3;border:1px solid #30363d;}
-            .modern-table thead { background:#1c1f26; }
-            .modern-table thead th {color:#ff4b4b;padding:14px 16px;text-align:left;font-weight:600;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;border-bottom:2px solid #ff4b4b;}
-            .modern-table tbody tr {border-bottom:1px solid #30363d;transition:background-color .2s ease;}
-            .modern-table tbody tr:hover {background-color:rgba(255,75,75,0.18);}
-            .modern-table tbody td {padding:12px 16px;border-bottom:1px solid #30363d;}
-            .modern-table tbody tr:nth-child(even) td {background-color:#2a1d1d;}
-            .modern-table a {color:#ff4b4b;text-decoration:none;}
-            .modern-table a:hover {text-decoration:underline;}
-            </style>
-            """
-        else:
-            table_css = """
-            <style>
-            .modern-table {width:100%;border-collapse:collapse;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;border-radius:8px;overflow:hidden;background:#ffffff;color:#262730;border:1px solid #e0e0e0;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
-            .modern-table thead {background:#ff4b4b;color:#ffffff;}
-            .modern-table thead th {padding:14px 16px;text-align:left;font-weight:600;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;}
-            .modern-table tbody tr {border-bottom:1px solid #e0e0e0;transition:background-color .2s ease;}
-            .modern-table tbody tr:hover {background-color:rgba(255,75,75,0.08);}
-            .modern-table tbody td {padding:12px 16px;}
-            .modern-table tbody tr:nth-child(even) td {background-color:#fff7f5;}
-            .modern-table a {color:#ff4b4b;text-decoration:none;font-weight:500;}
-            .modern-table a:hover {text-decoration:underline;}
-            </style>
-            """
+        # Theme-adaptive table CSS
+        table_css = """
+        <style>
+        .modern-table {width:100%;border-collapse:collapse;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;border-radius:8px;overflow:hidden;}
+        .modern-table thead {background:#ff4b4b;}
+        .modern-table thead th {color:#ffffff;padding:14px 16px;text-align:left;font-weight:600;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;}
+        .modern-table tbody tr {transition:background-color .2s ease;}
+        .modern-table tbody tr:hover {background-color:rgba(255,75,75,0.12);}
+        .modern-table tbody td {padding:12px 16px;}
+        .modern-table a {color:#ff4b4b;text-decoration:none;font-weight:500;}
+        .modern-table a:hover {text-decoration:underline;}
+        </style>
+        """
         st.markdown(table_css, unsafe_allow_html=True)
         st.markdown(table_html, unsafe_allow_html=True)
     else:
         # Edit mode: use Streamlit's native data_editor for inline editing
-        
-        # Apply dark mode styling to data editor
-        if is_dark():
-            st.markdown("""
-            <style>
-            /* Dark mode for data editor */
-            div[data-testid="stDataFrame"] > div,
-            div[data-testid="stDataFrame"] table,
-            div[data-testid="stDataFrame"] tbody,
-            div[data-testid="stDataFrame"] thead {
-                background-color: #1c1f26 !important;
-            }
-            
-            div[data-testid="stDataFrame"] th {
-                background-color: #1c1f26 !important;
-                color: #ff4b4b !important;
-                border-bottom: 2px solid #ff4b4b !important;
-                font-weight: 600 !important;
-            }
-            
-            div[data-testid="stDataFrame"] td,
-            div[data-testid="stDataFrame"] th,
-            div[data-testid="stDataFrame"] input,
-            div[data-testid="stDataFrame"] span {
-                color: #e6edf3 !important;
-                border-color: #30363d !important;
-            }
-            
-            div[data-testid="stDataFrame"] tr:hover td {
-                background-color: rgba(255,75,75,0.12) !important;
-            }
-            
-            div[data-testid="stDataFrame"] input {
-                background-color: #0d1117 !important;
-            }
-            
-            div[data-testid="stDataFrame"] tr:nth-child(even) td {
-                background-color: #161b22 !important;
-            }
-            </style>
-            """, unsafe_allow_html=True)
         
         st.caption("Double-click a cell to edit. Use the download below to save your changes.")
         edit_df = base_df.copy()

@@ -19,8 +19,8 @@ def main() -> None:
         st.page_link('streamlit_app.py', label='Home', icon='🔭')
         st.page_link('pages/02_Data_Query.py', label='Data Query', icon='🔎')
 
-        # Horizontal line for separation
-        st.markdown('<hr style="border: none; border-top: 2px solid #444; margin: 12px 0;">', unsafe_allow_html=True)
+        # Horizontal line for separation (theme-adaptive)
+        st.markdown('<hr style="border: none; border-top: 2px solid currentColor; opacity: 0.3; margin: 12px 0;">', unsafe_allow_html=True)
     
     # Delegate to the Home implementation
     home_main()

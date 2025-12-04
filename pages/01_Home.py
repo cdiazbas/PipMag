@@ -5,7 +5,6 @@ from typing import List, Any
 import altair as alt
 import pandas as pd
 import streamlit as st
-from theming import setup_theme, is_dark, init_theme
 
 
 @st.cache_data(show_spinner=True)
@@ -113,80 +112,20 @@ def load_data(csv_path: str = "data/la_palma_obs_data.csv") -> pd.DataFrame:
 
 
 def build_ui(df: pd.DataFrame) -> None:
-    init_theme()
-    
-    # Custom sidebar navigation removed to avoid duplicate links
-    
-    # Render a small header toolbar with a theme toggle
-    setup_theme(location="sidebar")
-    
-    # Page-scoped modern styling with theme awareness
-    if is_dark():
-        page_css = """
-        <style>
-        /* Accent underline for main title */
-        h1:after {content: ""; display: block; width: 64px; height: 4px; background: #ff4b4b; margin-top: 8px; border-radius: 2px;}
-        /* Card-like metrics - DARK MODE */
-        [data-testid="stMetric"] div, [data-testid="stMetric"] label {
-            color: #fafafa !important;
-        }
-        [data-testid="stMetric"] {
-            background: #1c1f26 !important; 
-            border: 1px solid #30363d !important; 
-            border-left: 4px solid #ff4b4b !important; 
-            border-radius: 8px; 
-            padding: 8px 12px; 
-            box-shadow: 0 1px 4px rgba(0,0,0,0.3) !important;
-        }
-        /* Dataframe header accent */
-        [data-testid="stDataFrame"] thead { background: #ff4b4b !important; }
-        [data-testid="stDataFrame"] thead th { color: #ffffff !important; }
-        /* Section subtitles - DARK MODE */
-        .section-title { font-weight: 600; font-size: 1rem; margin: 0 0 6px 0; color: #fafafa !important; }
-        .section-sub { color: #8b949e !important; margin-bottom: 12px; }
-        /* Force first nav item (main page) label to lowercase 'home' */
-        [data-testid="stSidebarNav"] li:first-child a, 
-        [data-testid="stSidebarNav"] li:first-child a span { 
-            text-transform: lowercase !important; 
-        }
-        </style>
-        """
-    else:
-        page_css = """
-        <style>
-        /* Accent underline for main title */
-        h1:after {content: ""; display: block; width: 64px; height: 4px; background: #ff4b4b; margin-top: 8px; border-radius: 2px;}
-        /* Card-like metrics - LIGHT MODE */
-        [data-testid="stMetric"] div, [data-testid="stMetric"] label {
-            color: inherit !important;
-        }
-        [data-testid="stMetric"] {
-            background: #ffffff; 
-            border: 1px solid #eaeaea; 
-            border-left: 4px solid #ff4b4b; 
-            border-radius: 8px; 
-            padding: 8px 12px; 
-            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-        }
-        /* Dataframe header accent */
-        [data-testid="stDataFrame"] thead { background: #ff4b4b !important; }
-        [data-testid="stDataFrame"] thead th { color: #ffffff !important; }
-        /* Section subtitles - LIGHT MODE */
-        .section-title { font-weight: 600; font-size: 1rem; margin: 0 0 6px 0; color: #333; }
-        .section-sub { color: #666; margin-bottom: 12px; }
-        /* Force first nav item (main page) label to lowercase 'home' */
-        [data-testid="stSidebarNav"] li:first-child a, 
-        [data-testid="stSidebarNav"] li:first-child a span { 
-            text-transform: lowercase !important; 
-        }
-        </style>
-        """
-    
-    st.markdown(page_css, unsafe_allow_html=True)
-    # Hide Streamlit's default sidebar navigation and highlight active custom link in dark mode
+    # Page-scoped styling
     st.markdown("""
     <style>
+    /* Accent underline for main title */
+    h1:after {content: ""; display: block; width: 64px; height: 4px; background: #ff4b4b; margin-top: 8px; border-radius: 2px;}
+    /* Card-like metrics */
+    [data-testid="stMetric"] {
+        border-left: 4px solid #ff4b4b; 
+        border-radius: 8px; 
+        padding: 8px 12px; 
+    }
+    /* Hide Streamlit's default sidebar navigation */
     [data-testid="stSidebarNav"] { display: none !important; }
+    /* Highlight active custom link */
     [data-testid="stSidebar"] [aria-current="page"] {
         background: #ff4b4b !important;
         color: #fff !important;
@@ -267,21 +206,7 @@ def build_ui(df: pd.DataFrame) -> None:
             )
             .properties(height=320)
         )
-        # Adapt Altair styling to the current Streamlit theme
-        if is_dark():
-            chart = (
-                chart
-                .configure(background="#0e1117")
-                .configure_axis(labelColor="#fafafa", titleColor="#fafafa", gridColor="#333333")
-                .configure_legend(labelColor="#fafafa", titleColor="#fafafa")
-                .configure_title(color="#fafafa")
-            )
-        else:
-            chart = (chart
-                     .configure(background="#ffffff")
-                     .configure_axis(gridColor="#eaeaea")
-            )
-        st.altair_chart(chart, width='stretch')
+        st.altair_chart(chart, width='stretch', theme="streamlit")
     else:
         st.info("No instrument data available for charting.")
 
@@ -345,20 +270,7 @@ def build_ui(df: pd.DataFrame) -> None:
             .properties(height=260)
         )
 
-        if is_dark():
-            heatmap = (
-                heatmap
-                .configure(background="#0e1117")
-                .configure_axis(labelColor="#fafafa", titleColor="#fafafa", grid=False)
-            )
-        else:
-            heatmap = (
-                heatmap
-                .configure(background="#ffffff")
-                .configure_axis(grid=False)
-            )
-
-        st.altair_chart(heatmap, width='stretch')
+        st.altair_chart(heatmap, width='stretch', theme="streamlit")
 
 
 
